@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086 # Docker network-en belül
+    database: iot_data
+    jsonData:
+      version: Flux
+      organization: iot_org
+      defaultBucket: iot_data
+      tlsSkipVerify: false
+    secureJsonData:
+      token: ${INFLUXDB_INIT_ADMIN_TOKEN}
+    editable: true
