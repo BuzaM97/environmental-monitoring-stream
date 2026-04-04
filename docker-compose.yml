@@ -1,0 +1,77 @@
+version: "3.8"
+services:
+  # 1. Zookeeper service is required for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+    networks:
+      - iot-network # Same network for both services Zookeeper and Kafka
+  # 2. Kafka service
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092" # Host gépre való csatlakozás porija (localhost:9092 - Python scriptekbõl)
+      - "29092:29092" # Docker hálózaton belüli kommunikáció (kafka:29092 - konténerektõl)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # 1 week data storage
+    networks:
+      - iot-network # Same network for both services Zookeeper and Kafka
+  # 3. InfluxDB service for time-series data storage
+  influxdb:
+    image: influxdb:2.7
+    environment:
+      INFLUXDB_DB: iot_data
+      INFLUXDB_ADMIN_USER: admin
+      INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
+      INFLUXDB_HTTP_AUTH_ENABLED: "true"
+      # Initial token amit az API hívások során használunk (InfluxDB 2.x)
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: iot_org
+      DOCKER_INFLUXDB_INIT_BUCKET: iot_data
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d # Data storage for 30 days
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_INIT_ADMIN_TOKEN}
+    ports:
+      - "8086:8086" # InfluxDB HTTP API port (Python client uses this)
+    volumes:
+      - influxdb_storage:/var/lib/influxdb2 # Persisting data
+    networks:
+      - iot-network # Same network for all services
+  # 4. Grafana service for data visualization
+  # Read from InfluxDB and visualize data
+  grafana:
+    image: grafana/grafana:10.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    ports:
+      - "3000:3000" # Grafana webes felület (http://localhost:3000)
+    # Grafana storage
+    volumes:
+      - grafana_storage:/var/lib/grafana
+      # If there is a provisioning folder, it automatically loads the data sources
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - influxdb
+    networks:
+      - iot-network # Same network for all services
+
+volumes:
+  influxdb_storage:
+  grafana_storage:
+
+networks:
+  iot-network:
+    driver: bridge

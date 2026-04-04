@@ -1,0 +1,17 @@
+# Kafka kliens a Pythonhoz - üzenetek küldése/olvasása a Kafka topic-okra
+kafka-python==2.0.2
+
+# InfluxDB adatbázis kliens - idősor adatok (metrics) írása az InfluxDB-be
+influxdb-client==1.18.0
+
+# HTTP kérésekhez - Sentinel Hub API vagy más REST endpointok meghívása
+requests==2.31.0
+
+# Ütemezés/scheduler - Producer periodikus futtatása (pl. percenként, naponta)
+apscheduler==3.10.4
+
+# Environment variables kezelése - .env fájlból olvassa az API tokeneket, jelszavakat
+python-dotenv==1.0.0
+
+# Napi ütemezéshez (Sentinel API lekérdezés)
+apscheduler==3.10.4
