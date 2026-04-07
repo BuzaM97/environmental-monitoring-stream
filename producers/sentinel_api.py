@@ -213,7 +213,7 @@ function evaluatePixel(samples) {
                 self.api_url,
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=90
             )
             
             # DEBUG: Print response details
