@@ -1,6 +1,5 @@
 # Kafka kliens a Pythonhoz - üzenetek küldése/olvasása a Kafka topic-okra
-kafka-python==2.0.2
-
+kafka-python-ng
 # InfluxDB adatbázis kliens - idősor adatok (metrics) írása az InfluxDB-be
 influxdb-client==1.18.0
 
