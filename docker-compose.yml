@@ -41,7 +41,7 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
       DOCKER_INFLUXDB_INIT_ORG: iot_org
       DOCKER_INFLUXDB_INIT_BUCKET: iot_data
-      DOCKER_INFLUXDB_INIT_RETENTION: 30d # Data storage for 30 days
+      DOCKER_INFLUXDB_INIT_RETENTION: 365d # Data storage for 365 days (extended for Sentinel historical data)
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_INIT_ADMIN_TOKEN}
     ports:
       - "8086:8086" # InfluxDB HTTP API port (Python client uses this)
