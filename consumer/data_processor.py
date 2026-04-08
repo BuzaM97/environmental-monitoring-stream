@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🔄 Data Processor Consumer - Process Kafka messages and write to InfluxDB
+Data Processor Consumer - Process Kafka messages and write to InfluxDB
 
 Receives messages from Kafka topic: iot_sensor_data
 Processes and writes data to InfluxDB.
@@ -116,7 +116,6 @@ class DataProcessor:
             # Convert to nanoseconds since epoch
             timestamp_ns = int(ts.timestamp() * 1e9)
             
-            # Use Line Protocol format instead of Point object
             line_protocol = (
                 f'iot_sensor,'
                 f'sensor_id={data.get("sensor_id", "unknown")},'
@@ -132,10 +131,10 @@ class DataProcessor:
             self.stats['influx_writes'] += 1
             
             logger.info(
-                f"📊 IoT adat feldolgozva | "
+                f"IoT data processed | "
                 f"Moisture: {data['soil_moisture']}% | "
                 f"WaterLevel: {data['water_level']}mm | "
-                f"Temp: {data['temperature']}°C"
+                f"Temp: {data['temperature']}C"
             )
             return True
         except Exception as e:
@@ -152,6 +151,10 @@ class DataProcessor:
             if 'raw_response' not in data:
                 logger.warning("Sentinel message missing raw_response field")
                 return False
+            
+            # Extract field name for location tag (field-0 or field-1)
+            field_name = data.get('field', 'unknown')
+            location_tag = f"location={field_name}"
             
             sentinel_payload = data.get('raw_response', {})
             aoi_bbox = data.get('aoi_bbox', [0, 0, 0, 0])
@@ -232,7 +235,7 @@ class DataProcessor:
                     if ndmi_value is not None:
                         fields = fields + ",ndmi=" + str(round(ndmi_value, 6))
                     
-                    tags = "sentinel_data,region=szentes,interval_index=" + str(idx) + ",date=" + interval_date + ",data_source=sentinel-2-l2a,quality=" + quality
+                    tags = "sentinel_data,region=szentes," + location_tag + ",interval_index=" + str(idx) + ",date=" + interval_date + ",data_source=sentinel-2-l2a,quality=" + quality
                     line_protocol = tags + " " + fields + " " + str(interval_timestamp_ns)
                     
                     self.write_api.write(bucket=self.influx_bucket, record=line_protocol)
@@ -243,7 +246,7 @@ class DataProcessor:
                     ndwi_str = str(round(ndwi_value, 6)) if ndwi_value else "N/A"
                     ndmi_str = str(round(ndmi_value, 6)) if ndmi_value else "N/A"
                     cloud_str = str(round(cloud_coverage, 1))
-                    log_msg = "[SENTINEL-INTERVAL " + str(idx) + "] " + str(interval_from) + " to " + str(interval_to) + " | Quality: " + str(quality) + " | Cloud: " + cloud_str + "% | NDVI: " + ndvi_str + " | NDWI: " + ndwi_str + " | NDMI: " + ndmi_str
+                    log_msg = "[" + field_name + "] [INTERVAL " + str(idx) + "] " + str(interval_from) + " to " + str(interval_to) + " | Quality: " + str(quality) + " | Cloud: " + cloud_str + "% | NDVI: " + ndvi_str + " | NDWI: " + ndwi_str + " | NDMI: " + ndmi_str
                     logger.info(log_msg)
                     
                 except Exception as e:
@@ -278,19 +281,19 @@ class DataProcessor:
     
     def run(self):
         """Processing loop"""
-        logger.info("🚀 Data Processor Consumer started")
+        logger.info("Data Processor Consumer started")
         
         try:
             self.connect_kafka()
             self.connect_influxdb()
             
-            logger.info("✅ Receiving messages...")
+            logger.info("Receiving messages...")
             
             for message in self.consumer:
                 self.process_message(message)
         
         except KeyboardInterrupt:
-            logger.info("\n⏸️  Consumer stopped (Ctrl+C)")
+            logger.info("\nConsumer stopped (Ctrl+C)")
             self.print_stats()
         except Exception as e:
             logger.error(f"Error: {e}")
@@ -302,11 +305,11 @@ class DataProcessor:
         """Cleanup"""
         if self.consumer:
             self.consumer.close()
-            logger.info("✅ Kafka consumer closed")
+            logger.info("Kafka consumer closed")
         
         if self.influx_client:
             self.influx_client.close()
-            logger.info("✅ InfluxDB client closed")
+            logger.info("InfluxDB client closed")
 
 
 if __name__ == "__main__":

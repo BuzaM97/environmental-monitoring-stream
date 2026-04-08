@@ -34,11 +34,15 @@ class SentinelAPIProducer:
         self.token_url = "https://services.sentinel-hub.com/auth/realms/main/protocol/openid-connect/token"
         self.api_url = "https://services.sentinel-hub.com/api/v1/statistics"
         
-        # AOI (Area of Interest) - Szentes, Hungary region
-        self.bbox = [17.684968,
-                     46.883896,
-                     17.738526,
-                     46.903838 ]
+        # Fields with coordinates
+        self.fields = {
+            "field-0": {
+                "bbox": [17.622395, 46.839147, 17.62879, 46.843212]
+            },
+            "field-1": {
+                "bbox": [17.612696, 46.842669, 17.619327, 46.847072]
+            }
+        }
         
         # Evalscript with NDVI, NDMI, and raw band values
         self.evalscript = """//VERSION=3
@@ -146,8 +150,8 @@ function evaluatePixel(samples) {
             logging.error(f"Error fetching OAuth2 token: {e}")
             raise
 
-    def build_request_payload(self):
-        """Build the Statistics API request payload"""
+    def build_request_payload(self, field_name, bbox):
+        """Build the Statistics API request payload for a specific field"""
         # Calculate date range: last 30 days
         to_date = datetime.utcnow()
         from_date = to_date - timedelta(days=360)
@@ -155,7 +159,7 @@ function evaluatePixel(samples) {
         payload = {
             "input": {
                 "bounds": {
-                    "bbox": self.bbox
+                    "bbox": bbox
                 },
                 "data": [
                     {
@@ -182,8 +186,8 @@ function evaluatePixel(samples) {
         }
         return payload
 
-    def fetch_sentinel_data(self):
-        """Fetch data from Sentinel Hub Statistics API"""
+    def fetch_sentinel_data(self, field_name, bbox):
+        """Fetch data from Sentinel Hub Statistics API for a specific field"""
         try:
             # Get fresh access token
             if not self.access_token:
@@ -195,9 +199,9 @@ function evaluatePixel(samples) {
                 "Content-Type": "application/json"
             }
             
-            payload = self.build_request_payload()
+            payload = self.build_request_payload(field_name, bbox)
             
-            logging.info(f"Sending request to Sentinel Hub API for AOI bbox: {self.bbox}")
+            logging.info(f"Sending request to Sentinel Hub API for {field_name} bbox: {bbox}")
             
             # DEBUG: Print request details
             print("\n" + "="*60)
@@ -250,27 +254,36 @@ function evaluatePixel(samples) {
             return False
 
     def process_and_send(self):
-        """Fetch Sentinel data and send to Kafka"""
+        """Fetch Sentinel data for all fields and send to Kafka"""
         try:
-            sentinel_data = self.fetch_sentinel_data()
-            print(json.dumps(sentinel_data, indent=2))  # For debugging
-            if sentinel_data is None:
-                logging.warning("Failed to fetch Sentinel data, skipping send")
-                return
-            
-            # Prepare message for Kafka
-            message = {
-                "timestamp": datetime.now().isoformat(),
-                "source": "sentinel-2-l2a",
-                "aoi_bbox": self.bbox,
-                "data_points": len(sentinel_data.get("data", [])) if isinstance(sentinel_data.get("data"), list) else 1,
-                "raw_response": sentinel_data
-            }
-            
-            if self.send_data(message):
-                logging.info("Sentinel data successfully processed and sent to Kafka")
-            else:
-                logging.error("Failed to send Sentinel data to Kafka")
+            # Process each field
+            for field_name, field_config in self.fields.items():
+                logging.info(f"\nProcessing {field_name}...")
+                bbox = field_config["bbox"]
+                
+                sentinel_data = self.fetch_sentinel_data(field_name, bbox)
+                
+                if sentinel_data is None:
+                    logging.warning(f"Failed to fetch Sentinel data for {field_name}, skipping send")
+                    continue
+                
+                # Prepare message for Kafka with field identifier
+                message = {
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "sentinel-2-l2a",
+                    "field": field_name,  # <-- Field name for Grafana filtering
+                    "aoi_bbox": bbox,
+                    "data_points": len(sentinel_data.get("data", [])) if isinstance(sentinel_data.get("data"), list) else 1,
+                    "raw_response": sentinel_data
+                }
+                
+                if self.send_data(message):
+                    logging.info(f"{field_name} data successfully processed and sent to Kafka")
+                else:
+                    logging.error(f"Failed to send {field_name} data to Kafka")
+                
+                # Small delay between field requests
+                time.sleep(2)
                 
         except Exception as e:
             logging.error(f"Error in process_and_send: {e}")
@@ -286,7 +299,9 @@ function evaluatePixel(samples) {
         
         logging.info("Sentinel API Producer started with daily schedule (9:00 AM)")
         logging.info(f"Kafka topic: {self.topic}")
-        logging.info(f"AOI bbox: {self.bbox}")
+        logging.info(f"Fields configured: {list(self.fields.keys())}")
+        for field_name, config in self.fields.items():
+            logging.info(f"  {field_name}: bbox = {config['bbox']}")
         
         try:
             while True:
@@ -309,9 +324,8 @@ function evaluatePixel(samples) {
 if __name__ == "__main__":
     producer = SentinelAPIProducer()
     
-    # Uncomment one of the following:
-    # For scheduled execution:
-    #producer.run_scheduled()
     
-    # For one-time execution (testing):
     producer.run_once()
+
+    producer.run_scheduled()
+    
